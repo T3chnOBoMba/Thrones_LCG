@@ -5,7 +5,7 @@ using UnityEngine;
 public class Card{
     public string name;
     public string cardType;
-    public int cost;
+    public int? cost;
 #nullable enable
     public List<string>? traits;
 #nullable disable
@@ -36,13 +36,13 @@ public class Card{
                 string CardType,
                 string Faction,
                 string Code,
-                int Cost=0,
+                int? Cost=null,
                 List<string> Traits=null,
                 Sprite Image=null,
                 string Text="",
                 int DeckLimit=3,
                 bool AbilityImplimented=false,
-                bool Military=false,
+                bool? Military=false,
                 bool? Intrigue=false,
                 bool? Power=false,
                 bool? Loyal=false,
