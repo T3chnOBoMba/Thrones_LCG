@@ -16,7 +16,7 @@ public class DisplayCard : MonoBehaviour
         deck = new Deck(Faction: "baratheon", Plots: CardDatabase.cardList,
             Draw: CardDatabase.cardList);
         deck.shuffle();
-        displayCard.Add(deck.DrawPile()[displayId]);
+        displayCard.Add(deck.DrawPile()[0]);
         artImage.sprite = displayCard[0].image;
     }
 

@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class CardDatabase : MonoBehaviour
 {
-    public static List<Card> cardList = new List<Card>();
+    public static List<Card> cardList = database.GameDatabase.getCards("stark");
 
     void Awake(){
         // cardList.Add(new Card(Name: "Stannis Baratheon", CardType: "character", Code: "354",
@@ -18,7 +18,7 @@ public class CardDatabase : MonoBehaviour
 
         // cardList.Add(new Card(Name: "Melisandre", CardType: "character", Code: "253",
         //     Faction: "baratheon", Image: Resources.Load<Sprite>("red_woman")));
-        database.GameDatabase.getCards("stark");
+        
     }
 
 

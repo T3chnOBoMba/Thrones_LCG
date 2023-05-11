@@ -8,6 +8,7 @@ using System.IO;
 using System.Net;
 using Newtonsoft.Json;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 
 namespace database{
@@ -40,7 +41,7 @@ namespace database{
             initiative INTEGER,
             claim INTEGER,
             reserve INTEGER,
-            income INTEGER
+            income INTEGER,
             pack_name TEXT)";
          
             // if table is empty, fill with card data
@@ -48,30 +49,35 @@ namespace database{
             commandCheckIfExists.CommandText = "SELECT count(*) from cards";
             IDataReader reader = commandCreateCardsTable.ExecuteReader();
             if(!reader.Read()){
-                populateDatabase("Assets/Scripts/Cards/thrones_card_data.json");
+                populateDatabase("Assets/Scripts/Cards/thrones_card_data.json", connection);
             }
 
 
             return connection;
         }
 
-        private static void populateDatabase(string path){
+        private static void populateDatabase(string path, IDbConnection connection){
+            Debug.Log("Populating db...");
             using (StreamReader r = new StreamReader(path)){
                 string json =  r.ReadToEnd();
-                List<CardDataContainer> cards = JsonConvert.DeserializeObject<List<CardDataContainer>>(json);
+                string[] excludedPacks = new string[] {"Redesigns", "Valyrian Draft Set",
+                    "Kingsmoot Variant", "Hand of the King Variant"};
+
+                List<CardDataContainer> cards = readCardData(json);
                 foreach(CardDataContainer card in cards){
-                    if(!card.work_in_progress && !String.Equals(card.pack_name, "Redesigns")){
-                        addCard(card);
+                    if(!card.work_in_progress && !excludedPacks.Contains(card.pack_name)){
+                        addCard(card, connection);
                     }              
                 }
             }
+            Debug.Log("Done populating db");
         }
 
         //@ToDo
-       private static bool addCard(CardDataContainer card){
-            IDbConnection connection = GetConnection();
+       private static bool addCard(CardDataContainer card, IDbConnection connection){
             IDbCommand commandAddCard = connection.CreateCommand();
-            string imageFileName = card.name.Replace(" ", "_") + $"_{card.code}.jpg";
+            string imageFileName = Regex.Replace(card.name.Replace(" ", "_") + $"_{card.code}.jpg",
+                "\"", "");
             try{
                 commandAddCard.CommandText = $@"INSERT INTO cards (
                 code,
@@ -90,34 +96,35 @@ namespace database{
                 loyal,
                 strength,
                 initiative,
-                claim
+                claim,
                 reserve,
                 income,
                 pack_name) VALUES (
-                    {card.code},
-                    {card.name},
-                    {card.type_code},
-                    {card.traits},
-                    {card.faction_code},
-                    {imageFileName},
-                    {card.text},
+                    '{card.code}',
+                    '{Regex.Replace(card.name, "'", "''")}',
+                    '{card.type_code}',
+                    {(card.cost == null ? "NULL": card.cost)},
+                    '{(card.traits == "" ? String.Empty : Regex.Replace(card.traits, "'", "''"))}',
+                    '{card.faction_code}',
+                    '{Regex.Replace(imageFileName, "'", "''")}',
+                    '{(card.text == "" ? String.Empty : Regex.Replace(card.text, "'", "''"))}',
                     {card.deck_limit},
                     0,
-                    {card.is_military},
-                    {card.is_intrigue},
-                    {card.is_power},
-                    {card.is_loyal},
-                    {card.strength},
-                    {card.initiative},
-                    {card.claim},
-                    {card.reserve},
-                    {card.income},
-                    {card.pack_name}
+                    {(card.is_military ? 1 : 0)},
+                    {(card.is_intrigue ? 1 : 0)},
+                    {(card.is_power ? 1 : 0)},
+                    {(card.is_loyal ? 1 : 0)},
+                    {(card.strength == null ? "NULL" : card.strength)},
+                    {(card.initiative == null ? "NULL" : card.initiative)},
+                    {(card.claim == null ? "NULL" : card.claim)},
+                    {(card.reserve == null ? "NULL" : card.reserve)},
+                    {(card.income == null ? "NULL" : card.income)},
+                    '{Regex.Replace(card.pack_name, "'", "''")}'
                 )";
                 commandAddCard.ExecuteNonQuery();
             }
             catch(Exception e){
-                Debug.Log("Failed to save card: " + e);
+                Debug.Log($@"Failed to save card:\n\nFailed Query:\n{commandAddCard.CommandText}\nError Mesage: {e}");
                 return false;
             }
             
@@ -128,14 +135,15 @@ namespace database{
                 }
             }
             catch(Exception e){
-                Debug.Log("Failed to save image: " + e);
+                Debug.Log($@"Failed to save image:\n\nFailed Query:\n{commandAddCard.CommandText}\nError Mesage: {e}");
                 return false;
             }
-            
             return true;
        }
 
-        //@ToDo
+        /**
+        Retreives cards from storage that match the parameters
+        */
         public static List<Card> getCards(string faction="", string type="", string name="",
         List<string> factions=null){
             IDbConnection connection = GetConnection();
@@ -160,21 +168,21 @@ namespace database{
                 if(firstOpInString){
                     commandString += " AND ";
                 }
-                commandString += $"(faction={faction})";
+                commandString += $"(faction='{faction}')";
             }
 
             if(!string.IsNullOrEmpty(type)){
                 if(firstOpInString){
                     commandString += " AND ";
                 }
-                commandString += $"(card_type={type})";
+                commandString += $"(card_type='{type}')";
             }
 
             if(!string.IsNullOrEmpty(name)){
                 if(firstOpInString){
                     commandString += " AND ";
                 }
-                commandString += $"(name={name})";
+                commandString += $"(name='{name}')";
             }
 
             commandGet.CommandText = commandString;
@@ -223,6 +231,26 @@ namespace database{
             int number;
             return Int32.TryParse(id, out number) ? number : null;
         }
+
+        /**
+        Reads json string from thrones_card_data and converts it into a list of C# objects
+        */
+        private static List<CardDataContainer> readCardData(string data){
+            List<CardDataContainer> cards = new List<CardDataContainer>();
+            data = data.Remove(0, 1);
+            data = data.Remove(data.Length - 1, 1);
+            string[] jsonObjects = data.Split("}");
+            // last array element is empty
+            for(int i = 0; i < jsonObjects.Length - 1; i++){
+                // remove starting comma after first object
+                if(i > 0){jsonObjects[i] = jsonObjects[i].Remove(0, 1);}
+                jsonObjects[i] = string.Concat(jsonObjects[i], "}");
+                jsonObjects[i] = Regex.Replace(jsonObjects[i], "false", "0");
+                jsonObjects[i] = Regex.Replace(jsonObjects[i], "true", "1");
+                cards.Add(JsonConvert.DeserializeObject<CardDataContainer>(jsonObjects[i]));
+            }
+            return cards;
+        }
     }
 
     [Serializable]
@@ -231,6 +259,7 @@ namespace database{
         public string name;
         public string type_code;
         public string traits;
+        public int? cost;
         public string faction_code;
         public string text;
         public int deck_limit;
@@ -238,11 +267,11 @@ namespace database{
         public bool is_intrigue;
         public bool is_power;
         public bool is_loyal;
-        public int strength;
-        public int initiative;
-        public int claim;
-        public int reserve;
-        public int income;
+        public int? strength;
+        public int? initiative;
+        public int? claim;
+        public int? reserve;
+        public int? income;
         public string pack_name;
         public bool work_in_progress;
         public string image_url;
