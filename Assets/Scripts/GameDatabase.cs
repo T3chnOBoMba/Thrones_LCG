@@ -128,7 +128,7 @@ namespace database{
                 return false;
             }
             
-            // download image for card in 'faction name'/'card_name'_'card_code'
+            // download image for card in 'faction name'/'card_type'/'card_name'_'card_code'
             try{
                 using (WebClient webClient = new WebClient()) {
                 webClient.DownloadFile(card.image_url, $"Assets/Resources/{card.faction_code}/{card.type_code}/{imageFileName}"); 
